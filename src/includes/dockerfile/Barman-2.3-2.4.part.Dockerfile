@@ -1,37 +1,29 @@
-FROM golang:1.8-jessie
+FROM golang:1.11-stretch
 
 # grab gosu for easy step-down from root
-ARG GOSU_VERSION=1.7
-RUN set -x \
-	&& apt-get update && apt-get install -y --no-install-recommends ca-certificates wget && rm -rf /var/lib/apt/lists/* \
-	&& wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)" \
-	&& wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture).asc" \
-	&& export GNUPGHOME="$(mktemp -d)" \
-	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-	&& gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu \
-	&& rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc \
-	&& chmod +x /usr/local/bin/gosu \
-	&& gosu nobody true 
+ARG GOSU_VERSION=1.11
+RUN set -eux \
+	&& apt-get update && apt-get install -y --no-install-recommends ca-certificates libpq5 wget gnupg2 gosu && rm -rf /var/lib/apt/lists/*  && \
+	gosu nobody true
+
+COPY ./dockerfile/bin /usr/local/bin/dockerfile
+RUN chmod -R +x /usr/local/bin/dockerfile && ln -s /usr/local/bin/dockerfile/functions/* /usr/local/bin/
 
 RUN  wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O - | apt-key add - && \
-     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main" >> /etc/apt/sources.list.d/pgdg.list' && \
+     sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main" >> /etc/apt/sources.list.d/pgdg.list' && \
      apt-get update && \
      apt-get install -y libffi-dev libssl-dev openssh-server
 
 {{ #PG_CLIENT_LATEST }}
 RUN  apt-get install -y postgresql-client-{{ PG_CLIENT_VERSION }}
 {{ /PG_CLIENT_LATEST }}{{ ^PG_CLIENT_LATEST }}
-RUN TEMP_DEB="$(mktemp)" && \
-    wget -O "$TEMP_DEB"  "http://atalia.postgresql.org/morgue/p/postgresql-{{ PG_CLIENT_VERSION }}/postgresql-client-{{ PG_CLIENT_VERSION }}_{{ PG_CLIENT_PACKAGE_VERSION }}_amd64.deb" && \
-    (dpkg -i "$TEMP_DEB" || apt-get install -y -f) && rm -f "$TEMP_DEB"
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/p/postgresql-{{ PG_CLIENT_VERSION }}/postgresql-client-{{ PG_CLIENT_VERSION }}_{{ PG_CLIENT_PACKAGE_VERSION }}_amd64.deb"
 {{ /PG_CLIENT_LATEST }}
 
 {{ #BARMAN_LATEST }}
 RUN  apt-get install -y barman={{ BARMAN_VERSION }}\*
 {{ /BARMAN_LATEST }}{{ ^BARMAN_LATEST }}
-RUN TEMP_DEB="$(mktemp)" && \
-    wget -O "$TEMP_DEB"  "http://atalia.postgresql.org/morgue/b/barman/barman_{{ BARMAN_PACKAGE_VERSION }}_all.deb" && \
-    (dpkg -i "$TEMP_DEB" || apt-get install -y -f) && rm -f "$TEMP_DEB"
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/b/barman/barman_{{ BARMAN_PACKAGE_VERSION }}_all.deb"
 {{ /BARMAN_LATEST }}
 
 RUN apt-get -y install cron
@@ -39,6 +31,7 @@ ADD barman/crontab /etc/cron.d/barman
 RUN rm -f /etc/cron.daily/*
 
 RUN groupadd -r postgres --gid=999 && useradd -r -g postgres -d /home/postgres --uid=999 postgres
+RUN mkdir /home/postgres && chown postgres:postgres /home/postgres
 
 ENV UPSTREAM_NAME pg_cluster
 ENV UPSTREAM_CONFIG_FILE /etc/barman.d/upstream.conf 
@@ -62,8 +55,8 @@ ENV BACKUP_DIR /var/backups
 
 EXPOSE 22
 
-COPY ./ssh /home/postgres/.ssh
-RUN chown -R postgres:postgres /home/postgres
+COPY ./ssh /tmp/.ssh
+RUN mv /tmp/.ssh/sshd_start /usr/local/bin/sshd_start && chmod +x /usr/local/bin/sshd_start
 COPY ./barman/configs/barman.conf /etc/barman.conf
 COPY ./barman/configs/upstream.conf $UPSTREAM_CONFIG_FILE
 COPY ./barman/bin /usr/local/bin/barman_docker

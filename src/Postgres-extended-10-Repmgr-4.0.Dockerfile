@@ -1,7 +1,5 @@
-
 ##########################################################################
 ##                         AUTO-GENERATED FILE                          ##
-##               BUILD_NUMBER=Wed  4 Jul 2018 10:16:37 MSK              ##
 ##########################################################################
 
 FROM postgres:10
@@ -9,7 +7,12 @@ FROM postgres:10
 RUN apt-get update --fix-missing && \
     apt-get install -y postgresql-server-dev-$PG_MAJOR wget openssh-server barman-cli
 
-RUN apt-get install -y postgresql-$PG_MAJOR-repmgr=4.0.6\*
+COPY ./dockerfile/bin /usr/local/bin/dockerfile
+RUN chmod -R +x /usr/local/bin/dockerfile && ln -s /usr/local/bin/dockerfile/functions/* /usr/local/bin/
+
+
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/r/repmgr/repmgr-common_4.0.6-2.pgdg+1_all.deb" 
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/r/repmgr/postgresql-$PG_MAJOR-repmgr_4.0.6-2.pgdg+1_amd64.deb" 
 
 # Inherited variables
 # ENV POSTGRES_PASSWORD monkey_pass
@@ -112,8 +115,8 @@ COPY ./pgsql/configs /var/cluster_configs
 
 ENV NOTVISIBLE "in users profile"
 
-COPY ./ssh /home/postgres/.ssh
-RUN chown -R postgres:postgres /home/postgres
+COPY ./ssh /tmp/.ssh
+RUN mv /tmp/.ssh/sshd_start /usr/local/bin/sshd_start && chmod +x /usr/local/bin/sshd_start
 
 EXPOSE 22
 EXPOSE 5432

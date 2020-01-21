@@ -1,17 +1,18 @@
-FROM postgres:{{ POSTGRES_VERSION }}
+##########################################################################
+##                         AUTO-GENERATED FILE                          ##
+##########################################################################
+
+FROM postgres:11
 
 RUN apt-get update --fix-missing && \
     apt-get install -y postgresql-server-dev-$PG_MAJOR wget openssh-server barman-cli
 
-{{ #REPMGR_LATEST }}
-RUN apt-get install -y postgresql-$PG_MAJOR-repmgr={{ REPMGR_PACKAGE_VERSION }}\*
-{{ /REPMGR_LATEST }}{{ ^REPMGR_LATEST }}
-RUN TEMP_DEB="$(mktemp)" && \
-    wget -O "$TEMP_DEB" "http://atalia.postgresql.org/morgue/r/repmgr/repmgr-common_{{ REPMGR_PACKAGE_VERSION }}_all.deb" && \
-    dpkg -i "$TEMP_DEB" && rm -f "$TEMP_DEB" && \
-    wget -O "$TEMP_DEB" "http://atalia.postgresql.org/morgue/r/repmgr/postgresql-$PG_MAJOR-repmgr_{{ REPMGR_PACKAGE_VERSION }}_amd64.deb" && \
-    (dpkg -i "$TEMP_DEB" || apt-get install -y -f) && rm -f "$TEMP_DEB"
-{{ /REPMGR_LATEST }}
+COPY ./dockerfile/bin /usr/local/bin/dockerfile
+RUN chmod -R +x /usr/local/bin/dockerfile && ln -s /usr/local/bin/dockerfile/functions/* /usr/local/bin/
+
+
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/r/repmgr/repmgr-common_4.0.6-2.pgdg+1_all.deb" 
+RUN install_deb_pkg "http://atalia.postgresql.org/morgue/r/repmgr/postgresql-$PG_MAJOR-repmgr_4.0.6-2.pgdg+1_amd64.deb" 
 
 # Inherited variables
 # ENV POSTGRES_PASSWORD monkey_pass
@@ -50,7 +51,6 @@ ENV CONFIGS_ASSIGNMENT_SYMBOL :
                                 #CONFIGS_DELIMITER_SYMBOL and CONFIGS_ASSIGNMENT_SYMBOL are used to parse CONFIGS variable
                                 # if CONFIGS_DELIMITER_SYMBOL=| and CONFIGS_ASSIGNMENT_SYMBOL=>, valid configuration string is var1>val1|var2>val2
 
-{{ #REPMGR_LATEST }}
 ENV REPMGR_MAJOR 4
 ENV REPMGR_NODES_TABLE nodes
 ENV REPMGR_NODE_ID_COLUMN node_id
@@ -60,17 +60,6 @@ ENV REPMGR_SHOW_NODES_TABLE show_nodes
 ENV REPMGR_NODE_ID_PARAM_NAME node_id
 ENV REPMGR_LOG_LEVEL_PARAM_NAME log_level
 ENV REPMGR_MASTER_RESPONSE_TIMEOUT_PARAM_NAME async_query_timeout
-{{ /REPMGR_LATEST }}{{ ^REPMGR_LATEST }}
-ENV REPMGR_MAJOR 3
-ENV REPMGR_NODES_TABLE repl_nodes
-ENV REPMGR_NODE_ID_COLUMN id
-ENV REPMGR_NODE_NAME_COLUMN name
-ENV REPMGR_CLUSTER_SHOW_MASTER_PATTERN * master
-ENV REPMGR_SHOW_NODES_TABLE repl_show_nodes
-ENV REPMGR_NODE_ID_PARAM_NAME node
-ENV REPMGR_LOG_LEVEL_PARAM_NAME loglevel
-ENV REPMGR_MASTER_RESPONSE_TIMEOUT_PARAM_NAME master_reponse_timeout
-{{ /REPMGR_LATEST }}
 
 # ENV CONFIGS "listen_addresses:'*'"
                                     # in format variable1:value1[,variable2:value2[,...]] if CONFIGS_DELIMITER_SYMBOL=, and CONFIGS_ASSIGNMENT_SYMBOL=:
@@ -124,8 +113,8 @@ COPY ./pgsql/configs /var/cluster_configs
 
 ENV NOTVISIBLE "in users profile"
 
-COPY ./ssh /home/postgres/.ssh
-RUN chown -R postgres:postgres /home/postgres
+COPY ./ssh /tmp/.ssh
+RUN mv /tmp/.ssh/sshd_start /usr/local/bin/sshd_start && chmod +x /usr/local/bin/sshd_start
 
 EXPOSE 22
 EXPOSE 5432
