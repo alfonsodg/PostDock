@@ -103,6 +103,8 @@ ENV CHECK_PGCONNECT_TIMEOUT 10
 ENV REPMGR_SLOT_NAME_PREFIX repmgr_slot_
 ENV LAUNCH_RECOVERY_CHECK_INTERVAL 30
 
+RUN ls /usr/local/bin
+RUN mkdir /usr/local/bin/cluster -p
 COPY ./pgsql/bin /usr/local/bin/cluster
 RUN chmod -R +x /usr/local/bin/cluster
 RUN ln -s /usr/local/bin/cluster/functions/* /usr/local/bin/
